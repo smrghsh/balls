@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>drop a ball</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<style>
+  :root { --bg:#0b0b0f; --fg:#f2f2f2; --mute:#a0a0ac; --acc:#ff3fa4; --card:#17171f; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; min-height:100dvh; background:var(--bg); color:var(--fg); font:16px/1.4 -apple-system, system-ui, sans-serif; display:flex; flex-direction:column; }
+  main { flex:1; max-width:520px; width:100%; margin:0 auto; padding:18px 16px 0; }
+  h1 { margin:0 0 2px; font-size:22px; letter-spacing:.02em; }
+  .mute { color:var(--mute); font-size:13px; }
+  .grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:16px 0; }
+  .ball { aspect-ratio:1; border-radius:50%; padding:0; border:3px solid transparent; background:var(--card); display:grid; place-items:center; }
+  .ball canvas { width:84%; height:84%; border-radius:50%; }
+  .ball.sel { border-color:var(--acc); box-shadow:0 0 14px rgba(255,63,164,.5); }
+  footer { position:sticky; bottom:0; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); background:linear-gradient(to top, var(--bg) 70%, transparent); }
+  #drop { width:100%; max-width:520px; display:block; margin:0 auto; min-height:72px; border:0; border-radius:18px; background:var(--acc); color:#fff; font:800 24px/1 -apple-system, system-ui, sans-serif; letter-spacing:.04em; touch-action:manipulation; user-select:none; }
+  #drop:active { transform:scale(.97); filter:brightness(1.1); }
+  #msg { text-align:center; min-height:20px; margin-top:8px; }
+</style>
+</head>
+<body>
+  <main>
+    <h1>drop a ball</h1>
+    <div class="mute">pick one, then hit drop. it lands on the far wall. mash it if you like.</div>
+    <div class="grid" id="grid"></div>
+  </main>
+  <footer>
+    <button id="drop">DROP</button>
+    <div id="msg" class="mute"></div>
+  </footer>
+<script type="module">
+  import { STYLES, drawStyle } from './ball-styles.js';
+  const API = 'https://ach-proj.tail36c031.ts.net', KEY = 'ach-balls-2026';
+  const grid = document.getElementById('grid'), btn = document.getElementById('drop'), msg = document.getElementById('msg');
+  let picked = STYLES[Math.floor(Math.random() * STYLES.length)].name;
+  // a round preview: the middle of the texture under a soft sphere shading
+  function preview(style) {
+    const tex = drawStyle(style), c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.save(); g.beginPath(); g.arc(64, 64, 62, 0, Math.PI * 2); g.clip();
+    g.drawImage(tex, 48, 0, 160, 128, 0, 0, 128, 128);
+    const sh = g.createRadialGradient(44, 40, 6, 64, 64, 70);
+    sh.addColorStop(0, 'rgba(255,255,255,.35)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,.55)');
+    g.fillStyle = sh; g.fillRect(0, 0, 128, 128); g.restore();
+    return c;
+  }
+  for (const s of STYLES) {
+    const b = document.createElement('button'); b.className = 'ball' + (s.name === picked ? ' sel' : ''); b.setAttribute('aria-label', s.name);
+    b.append(preview(s));
+    b.addEventListener('click', () => { picked = s.name; grid.querySelectorAll('.ball').forEach((x) => x.classList.toggle('sel', x === b)); });
+    grid.append(b);
+  }
+  let inflight = 0, dropped = 0;
+  async function drop() {
+    if (inflight > 6) return;
+    inflight++;
+    try {
+      const r = await fetch(API + '/api/drop', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ball: picked, key: KEY }), signal: AbortSignal.timeout(5000) });
+      if (r.status === 429) msg.textContent = 'whoa, easy';
+      else if (!r.ok) msg.textContent = 'the wall said no';
+      else { dropped++; msg.textContent = dropped === 1 ? 'dropped!' : `dropped ×${dropped}`; }
+    } catch { msg.textContent = 'can’t reach the wall right now'; }
+    finally { inflight--; }
+  }
+  btn.addEventListener('click', drop);
+</script>
+</body>
+</html>
